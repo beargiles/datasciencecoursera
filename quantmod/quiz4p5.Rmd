@@ -1,0 +1,25 @@
+Simple example of **quantmod** library.
+
+```{r message=FALSE}
+library(quantmod)
+require(plyr)
+```
+
+First we load data for Amazon.
+```{r, message=FALSE}
+amzn = getSymbols("AMZN", auto.assign=FALSE)
+```
+
+Second we create an ordered factor for days of the week then create a function that converts a date to this ordered factor.
+
+```{r}
+days <- ordered(c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'))
+f <- function(x) { factor(weekdays(as.Date(x)), days) }
+```
+
+Now we want to count the number of days in 2012.
+
+```{r}
+sampleTimes = index(amzn)
+count(sapply(sampleTimes[grep("2012-", sampleTimes)], f))
+```
