@@ -1,0 +1,103 @@
+---
+title: "ExploratoryDataLecture"
+output: html_document
+---
+
+These notes capture the discussion in Exploratory Data,
+Week 4.
+
+```{r load.training.data}
+library(ggplot2)
+
+# load the data
+train.subject <- read.table('data/UCI HAR Dataset/train/subject_train.txt', header=F)
+train.data <- read.table('data/UCI HAR Dataset/train/X_train.txt', header=F)
+train.activity <- read.table('data/UCI HAR Dataset/train/y_train.txt', header=F)
+```
+
+```{r label.training.data}
+# label the data.
+labels = read.table('data/UCI HAR Dataset/features.txt', sep=' ')
+labels <- make.names(labels[,2])
+names(train.data) = make.names(labels)
+names(train.subject)[1] = 'subject'
+```
+
+```{r convert.activity.to.factors}
+# convert activity
+labels = read.table('data/UCI HAR Dataset/activity_labels.txt')
+train.activity[,2] = sapply(train.activity[,1], function(x) { labels[x, 2] })
+names(train.activity) = c('activity', 'activity.level')
+```
+
+Now we want to look at the data for a single subject.
+
+```{r select.one.subject}
+# merge subject with data
+train.sdata <- cbind(train.subject, train.activity, train.data)
+# select one subject
+subj1 <- subset(train.sdata, subject==1)
+```
+
+Plot acceleration with basic graphic system and activity-as-an-integer
+
+```{r}
+par(mfrow = c(3, 1), mar = c(5, 4, 1, 1))
+#title('Mean Acceleration for Subject 1')
+plot(subj1[,'tBodyAccMag.mean..'], x=subj1$activity, col=subj1$activity, ylab='Mean Acc')
+plot(subj1[,'tBodyAccMag.max..'], x=subj1$activity, col=subj1$activity, ylab='Max Acc')
+plot(subj1[,'tBodyAccJerkMag.max..'], x=subj1$activity, col=subj1$activity, ylab='Max Jerk')
+```
+
+Plot acceleration with basic graphic system and activity-as-an-factor
+
+```{r}
+par(mfrow = c(3, 1), mar = c(5, 4, 1, 1))
+#title('Mean Acceleration for Subject 1')
+plot(subj1[,'tBodyAccMag.mean..'], x=subj1$activity.level, col=subj1$activity, ylab='Mean Acc')
+plot(subj1[,'tBodyAccMag.max..'], x=subj1$activity.level, col=subj1$activity, ylab='Max Acc')
+plot(subj1[,'tBodyAccJerkMag.max..'], x=subj1$activity.level, col=subj1$activity, ylab='Max Jerk')
+```
+
+Perform Hierarchical Clustering on maximum acceleration.
+
+```{r clustering}
+hc <- hclust(dist(subj1[,c('activity','tBodyAccMag.max..')]))
+plot(hc)
+```
+
+This shows a clear separation between idle activities on the left and active activities on the right.
+
+Perform singular value decomposition.
+
+```{r svd}
+#names(subj1)
+#names(subj1)[563]
+#names(subj1)[564]
+#svd1 = svd(scale(subj1[,-c(563,564)]))
+#par(mfrow=c(1,2))
+#plot(svd1$u[,1], col=subj1$activity, pch=19)
+#plot(svd1$u[,2], col=subj1$activity, pch=19)
+#head(svd1)
+```
+
+
+
+For comparison - plotting mean acceleration with ggplot system.
+
+```{r mean.with.ggplot}
+par(mfrow = c(2, 1), mar = c(5, 4, 1, 1))
+ggplot(subj1, aes(x=activity.level, y= tBodyAccMag.mean..)) +
+  geom_point()
+ggplot(subj1, aes(x=activity.level, y= tBodyAccMag.max..)) +
+  geom_point()
+```
+
+```{r}
+
+# requires vector of size 206 MB
+#distMatrix <- dist(s[,2:4])
+#hc <- hclust(distMatrix)
+#plot(hc)
+#names(subj1)
+```
