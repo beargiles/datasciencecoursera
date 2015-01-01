@@ -1,0 +1,131 @@
+---
+title: "Body Sensor Clustering Case Study"
+output: html_document
+---
+
+This is notes based on coursera class https://class.coursera.org/exdata-008/lecture/71
+
+Original data from: http://archive.ics.uci.edu/ml/datasets/Human+Activity+Recognition+Using+Smartphones
+
+## Data Processing
+
+Load the data.
+
+```{r}
+#load("smartphones/data/UCI HAR Dataset")
+# load the data
+train.subject <- read.table('C:/users/bgiles/Documents/github/datasciencecoursera/smartphones/data/UCI HAR Dataset/train/subject_train.txt', header=F)
+train.data <- read.table('C:/users/bgiles/Documents/github/datasciencecoursera/smartphones/data/UCI HAR Dataset/train/X_train.txt', header=F)
+train.activity <- read.table('C:/users/bgiles/Documents/github/datasciencecoursera/smartphones/data/UCI HAR Dataset/train/y_train.txt', header=F)
+```
+
+Label the data.
+
+```{r label.training.data}
+# label the data.
+labels = read.table('C:/users/bgiles/Documents/github/datasciencecoursera/smartphones/data/UCI HAR Dataset/features.txt', sep=' ')
+labels <- make.names(labels[,2])
+names(train.data) = make.names(labels)
+names(train.subject)[1] = 'subject'
+
+names(train.activity)[1] = 'activity'
+
+# there's some way to read this from file...
+train.activity[train.activity[,1] == 1 ,1] <- "WALKING"
+train.activity[train.activity[,1] == 2, 1] <- "WALK UP"
+train.activity[train.activity[,1] == 3, 1] <- "WALK DOWN"
+train.activity[train.activity[,1] == 4, 1] <- "SITTING"
+train.activity[train.activity[,1] == 5, 1] <- "STANDING"
+train.activity[train.activity[,1] == 6, 1] <- "LAYING DOWN"
+
+train.activity <- transform(train.activity, activity = factor(activity))
+
+train <- cbind(train.subject, train.data, train.activity)
+```
+
+## plot average acceleration for first subject.
+
+```{r}
+par(mfrow = c(1, 2), mar = c(5, 4, 1, 1))
+sub1 <- subset(train, train$subject == 1);
+
+plot(sub1[, 2], col = sub1$activity, ylab = names(sub1)[2])
+plot(sub1[, 3], col = sub1$activity, ylab = names(sub1)[3])
+legend("bottomright", legend = unique(sub1$activity), col=unique(sub1$activity), pch = 1)
+```
+
+Perform clustering based on Euclidean distance
+
+```
+#source("myplclust.R")
+#distanceMatrix <- dist(sub1[, 2:4])
+#hclustering <- hclust(distanceMatrix)
+#myplclust(hclustering, lab.col = unclass(sub1$activity))
+```
+
+(No clear clustering)
+
+## plot max acceleration for first subject.
+
+```{r}
+par(mfrow = c(1, 2))
+plot(sub1[,11], pch= 19, col = sub1$activity, ylab = names(sub1)[11])
+plot(sub1[,12], pch= 19, col = sub1$activity, ylab = names(sub1)[12])
+```
+
+This shows that acceleration can probably be used to distinguish activities, at least active vs. stationary.
+
+```{r}
+#source("myplclust.R")
+#distanceMatrix <- dist(sub1[, 11:13])
+#hclustering <- hclust(distanceMatrix)
+#myplclust(hclustering, lab.col = unclass(sub1$activity))
+```
+
+(shows clear clustering between active and stationary, no clear clustering within these two categories.)
+
+## Singular Value Decomposition
+
+Perform singular value decomposition to find most important factor.
+
+```{r}
+# drop first and last columns since they're subject and activity
+svd1 = svd(scale(sub1[, -c(1, 563)]))
+par(mfrow = c(1, 2))
+plot(svd1$u[, 1], col = sub1$activity, pch = 19, ylab = names(sub1)[which.max(svd1$v[,2])])
+plot(svd1$u[, 2], col = sub1$activity, pch = 19, ylab = names(sub1)[which.max(svd1$v[,4])])
+```
+
+First singular vector clearly separates motion vs. stationary. The second singluar vector is less clear - perhaps it separates out walking upstairs.
+
+## Find maximum Contributor
+
+```{r}
+plot(svd1$v[, 2], phd = 19)
+
+maxContrib <- which.max(svd1$v[,2])
+names(sub1)[which.max(svd1$v[,2])]
+
+# distanceMatrix <- dist(sub1[, c(11:13, maxContrib)])
+# hclustering <- hclust(distanceMatrix)
+# myplclust(hclustering, lab.col = unclass(sub1$activity))
+```
+
+(Plot shows clear separation between each motion (walk, walk up, walk down), but rest are still jumbled.)
+
+
+```{r}
+kClust <- kmeans(sub1[, -c(1,563)], centers = 6, nstart = 250)
+table(kClust$cluster, sub1$activity)
+```
+
+Plot variable centers
+
+```{r}
+par(mfrow = c(2, 3))
+plot(kClust$center[1, 1:10], pch = 19, ylab = "Center", xlab="1")
+plot(kClust$center[2, 1:10], pch = 19, ylab = "Center", xlab="2")
+plot(kClust$center[3, 1:10], pch = 19, ylab = "Center", xlab="3")
+plot(kClust$center[4, 1:10], pch = 19, ylab = "Center", xlab="4")
+plot(kClust$center[5, 1:10], pch = 19, ylab = "Center", xlab="5")
+plot(kClust$center[6, 1:10], pch = 19, ylab = "Center", xlab="6")
