@@ -1,0 +1,241 @@
+---
+title: "ExData - Air Pollution Case Study"
+output: html_document
+---
+
+These are notes from a lecture in the Coursera "Exploring Data" class: https://class.coursera.org/exdata-008/lecture/69. For variety I am using different years than the lecture.
+
+Qeustion: Are pollution levels lower today than in 2003?
+
+The data is available at http://epa.gov/ttn/airs/airsaqs/detaildata/downloadaqsdata.htm (old) or http://aqsd1.epa.gov/aqsweb/aqstmp/airdata/download_files.html (new) and we interested in the files: http://www.epa.gov/ttn/airs/airsaqs/detaildata/501files/RD_501_88101_2012.zip et al.
+
+Looking at the first few lines of the file we see two possible headers, for 'RD' and 'RC' records, but only the former appear so we'll ignore the latter.
+
+## Data Preparation
+First we read in the data.
+
+```{r}
+pm1999 <- read.table("C:/users/bgiles/Downloads/exdata/RD_501_88101_1999/RD_501_88101_1999-0.txt", comment.char="#", header=FALSE, sep="|", na.strings = "")
+
+pm2003 <- read.table("C:/users/bgiles/Downloads/exdata/RD_501_88101_2003/RD_501_88101_2003-0.txt", comment.char="#", header=FALSE, sep="|", na.strings = "")
+
+pm2008 <- read.table("C:/users/bgiles/Downloads/exdata/RD_501_88101_2008/RD_501_88101_2008-0.txt", comment.char="#", header=FALSE, sep="|", na.strings = "")
+
+pm2013 <- read.table("C:/users/bgiles/Downloads/exdata/RD_501_88101_2013/RD_501_88101_2013-0.txt", comment.char="#", header=FALSE, sep="|", na.strings = "")
+```
+
+We then read the first line of the header and apply labels to the data.
+```{r}
+cnames <- readLines("C:/users/bgiles/Downloads/exdata/RD_501_88101_1999/RD_501_88101_1999-0.txt", 1)
+cnames <- strsplit(cnames, "|", fixed=TRUE)
+
+# cnames is actually list of lists and we only want first element.
+names(pm1999) <- make.names(cnames[[1]])
+names(pm2003) <- make.names(cnames[[1]])
+names(pm2008) <- make.names(cnames[[1]])
+names(pm2013) <- make.names(cnames[[1]])
+```
+
+We can also coerce the dates to Date instead of encoded integers.
+
+```{r}
+pm1999$Date <- as.Date(as.character(pm1999$Date), "%Y%m%d");
+pm2003$Date <- as.Date(as.character(pm2003$Date), "%Y%m%d");
+pm2008$Date <- as.Date(as.character(pm2008$Date), "%Y%m%d");
+pm2013$Date <- as.Date(as.character(pm2013$Date), "%Y%m%d");
+```
+
+## Initial Analysis
+
+We start by extracting the data.
+```{r}
+x1999 <- pm1999$Sample.Value
+x2003 <- pm2003$Sample.Value
+x2008 <- pm2008$Sample.Value
+x2013 <- pm2013$Sample.Value
+summary(x2003)
+```
+
+We can now compare the data visually. We use a log scale since there is such a broad range between the mean and peak values.
+
+```{r}
+boxplot(log10(x1999), log10(x2003), log10(x2008), log10(x2013))
+```
+
+Some of the values are negative? Why? Is this a problem?
+
+```{r}
+negative <- x2013 < 0
+sum(negative, na.rm = TRUE)
+mean(negative, na.rm = TRUE)
+```
+
+
+In 2013 there are over 65k negative values, but they only account for 2.5% of the data. Instrumentation error? We can ignore this for now but it could be interesting to see if there's dependence on location, time of year, time of day, etc. How does the time of data collection change?
+
+```{r}
+### this charts a histogram of data by month. It shows
+### the collection is reasonably uniform.
+###
+# par(mfrow = c(2, 2))
+# hist(pm1999$Date, "month", xlab="Month")
+# hist(pm2003$Date, "month", xlab="Month")
+# hist(pm2008$Date, "month", xlab="Month")
+# hist(pm2013$Date, "month", xlab="Month")
+
+### this shows a histogram of missing data by month.
+### it shows is started around June 2008 and has been
+### fairly steady since then. (note scale is by half-year
+### in 2008.)
+###
+# par(mfrow = c(1, 2))
+# hist(pm2008$Date[x2008 < 0], "month", xlab="Month")
+# hist(pm2008$Date[x2013 < 0], "month", xlab="Month")
+```
+
+Those graphs shows the information nationwide. What about pollution at a specific state?
+
+We start by examining the data for New York. The choice is arbitrary.
+
+
+```{r}
+# New York is state code 36
+site1999 <- unique(subset(pm1999, State.Code==36, c(County.Code, Site.ID)))
+site2003 <- unique(subset(pm2003, State.Code==36, c(County.Code, Site.ID)))
+site2008 <- unique(subset(pm2008, State.Code==36, c(County.Code, Site.ID)))
+site2013 <- unique(subset(pm2013, State.Code==36, c(County.Code, Site.ID)))
+```
+
+We want to compare sites with data for all four years. We add a column encoding the county and site id and then finding the four-way intersection.
+
+```{r}
+# slight cleanup
+site1999 <- paste(site1999[,1], site1999[,2], sep=".")
+site2003 <- paste(site2003[,1], site2003[,2], sep=".")
+site2008 <- paste(site2008[,1], site2008[,2], sep=".")
+site2013 <- paste(site2013[,1], site2013[,2], sep=".")
+
+# find sites with data in all four samples. I do not know
+# if there's a way to create an intersection in one step.
+all <- intersect(site1999, site2003)
+all <- intersect(all, site2008)
+all <- intersect(all, site2013)
+# there are 10 candidate sites.
+all
+
+# annotate data frames with pasted value
+pm1999$county.site <- with(pm1999, paste(County.Code, Site.ID, sep="."))
+pm2003$county.site <- with(pm2003, paste(County.Code, Site.ID, sep="."))
+pm2008$county.site <- with(pm2008, paste(County.Code, Site.ID, sep="."))
+pm2013$county.site <- with(pm2013, paste(County.Code, Site.ID, sep="."))
+```
+
+Create subjects of the data at these sites.
+
+```{r subset the data}
+cnt1999 <- subset(pm1999, State.Code == 36 & county.site %in% all)
+cnt2003 <- subset(pm2003, State.Code == 36 & county.site %in% all)
+cnt2008 <- subset(pm2008, State.Code == 36 & county.site %in% all)
+cnt2013 <- subset(pm2013, State.Code == 36 & county.site %in% 
+all)
+```
+
+We can now count the number of records per site to determine the best site to sample.
+
+```{r count data by site}
+d1999 <- sapply(split(cnt1999, cnt1999$county.site), nrow)
+d2003 <- sapply(split(cnt2003, cnt2003$county.site), nrow)
+d2008 <- sapply(split(cnt2008, cnt2008$county.site), nrow)
+d2013 <- sapply(split(cnt2013, cnt2013$county.site), nrow)
+df <- rbind(d1999, d2003, d2008, d2013)
+
+df
+```
+
+## Examining A Site.
+
+I examined three sites (101.3, 63.2008 and 5.110). The last most clearly shows a seasonal pattern.
+
+
+```{r}
+pm1999sub <- subset(pm1999, State.Code == 36 & County.Code == 5 & Site.ID == 110)
+pm2003sub <- subset(pm2003, State.Code == 36 & County.Code == 5 & Site.ID == 110)
+pm2008sub <- subset(pm2008, State.Code == 36 & County.Code == 5 & Site.ID == 110)
+pm2013sub <- subset(pm2013, State.Code == 36 & County.Code == 5 & Site.ID == 110)
+```
+
+Our first plot looks at all data points to check for seasonal variation.
+
+```{r}
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+rng <- range(pm1999sub$Sample.Value, pm2003sub$Sample.Value, pm2008sub$Sample.Value, pm2013sub$Sample.Value, na.rm=T)
+
+plot(pm1999sub$Date, pm1999sub$Sample.Value, pch=20, ylim=rng, xlab="1999", ylab="PM[2.5]")
+abline(h = median(pm1999sub$Sample.Value, na.rm=T))
+
+plot(pm2003sub$Date, pm2003sub$Sample.Value, pch=20, ylim=rng, xlab="2003", ylab="PM[2.5]")
+abline(h = median(pm2003sub$Sample.Value, na.rm=T))
+
+plot(pm2008sub$Date, pm2008sub$Sample.Value, pch=20, ylim=rng, xlab="2008", ylab="PM[2.5]")
+abline(h = median(pm2008sub$Sample.Value, na.rm=T))
+
+plot(pm2013sub$Date, pm2013sub$Sample.Value, pch=20, ylim=rng, xlab="2013", ylab="PM[2.5]")
+abline(h = median(pm2013sub$Sample.Value, na.rm=T))
+```
+
+There is a very pronounced summer peak in 2008, plus late winter peaks in 2003 and 2008. It's hard to directly compare the plots so we also look at a box plot.
+
+
+```{r}
+par(mfrow = c(1, 1))
+#boxplot(log10(pm1999sub$Sample.Value), log10(pm2003sub$Sample.Value), log10(pm2008sub$Sample.Value), log10(pm2013sub$Sample.Value))
+boxplot(pm1999sub$Sample.Value, pm2003sub$Sample.Value, pm2008sub$Sample.Value, pm2013sub$Sample.Value, xlab="Year", ylab="PM[2.5]")
+```
+
+The pattern is clear - since 2003 there has been progressively lower mean levels of pollution, less variability, and lower maximums. This pattern was seen at all three sites examined.
+
+## Statewide Summary
+
+The last analysis showed us the results at a single site. What about the results nationwide?
+
+We first calculate the mean value within each state.
+
+```{r}
+# create mean of value within each state.
+mean1999 <- with(pm1999, tapply(Sample.Value, State.Code, mean, na.rm=T))
+mean2003 <- with(pm2003, tapply(Sample.Value, State.Code, mean, na.rm=T))
+mean2008 <- with(pm2008, tapply(Sample.Value, State.Code, mean, na.rm=T))
+mean2013 <- with(pm2013, tapply(Sample.Value, State.Code, mean, na.rm=T))
+```
+
+Now a data frame from state to year.
+
+```{r}           
+# create data frames
+d1999 <- data.frame(state = names(mean1999), mean=mean1999)
+d2003 <- data.frame(state = names(mean2003), mean=mean2003)
+d2008 <- data.frame(state = names(mean2008), mean=mean2008)
+d2013 <- data.frame(state = names(mean2013), mean=mean2013)
+
+mrg1 <- merge(d1999, d2003, by ="state", suffixes = c(".1999", ".2003"))
+mrg2 <- merge(d2008, d2013, by ="state", suffixes = c(".2008", ".2013"))
+mrg <- merge(mrg1, mrg2, by="state")
+```
+
+Finally we can plot the data from year to year
+
+```{r}
+par(mfrow=c(1,1))
+with(mrg, plot(rep(1999, dim(mrg)[1]), mrg$mean.1999, xlim=c(1998,2013), xlab="Year", ylab="PM[2.5]"))
+with(mrg, points(rep(2003, dim(mrg)[1]), mrg$mean.2003))
+with(mrg, points(rep(2008, dim(mrg)[1]), mrg$mean.2008))
+with(mrg, points(rep(2013, dim(mrg)[1]), mrg$mean.2013))
+segments(rep(1999, dim(mrg)[1]), mrg$mean.1999, rep(2003, dim(mrg)[2]), mrg$mean.2003)
+segments(rep(2003, dim(mrg)[1]), mrg$mean.2003, rep(2008, dim(mrg)[2]), mrg$mean.2008)
+segments(rep(2008, dim(mrg)[1]), mrg$mean.2008, rep(2013, dim(mrg)[2]), mrg$mean.2013)
+```
+
+Most states drop from year to year, with a few states going against the trend.
+
+TODO: how to identify the outlier in the 2013 data?
